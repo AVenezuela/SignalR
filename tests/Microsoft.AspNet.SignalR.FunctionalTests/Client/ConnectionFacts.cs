@@ -34,6 +34,69 @@ namespace Microsoft.AspNet.SignalR.Tests
         [InlineData(HostType.HttpListener, TransportType.LongPolling, MessageBusType.Default)]
         [InlineData(HostType.HttpListener, TransportType.ServerSentEvents, MessageBusType.Default)]
         [InlineData(HostType.HttpListener, TransportType.Websockets, MessageBusType.Default)]
+        public void ReconnectExceedingReconnectWindowDisconnectsWithFastBeatInterval(HostType hostType, TransportType transportType, MessageBusType messageBusType)
+        {
+            // Test cannot be async because if we do host.ShutDown() after an await the connection stops.
+
+            using (var host = CreateHost(hostType, transportType))
+            {
+                host.Initialize(keepAlive: 9, messageBusType: messageBusType);
+                var connection = CreateHubConnection(host);
+
+
+                using (connection)
+                {
+                    var disconnectWh = new ManualResetEventSlim();
+
+                    connection.Closed += () =>
+                    {
+                        disconnectWh.Set();
+                    };
+
+                    // SUPER ugly, alternative is adding an overload to the create host function, adding a member to the
+                    // IClientTransport object or using Reflection.  Adding a member to IClientTransport isn't horrible
+                    // but I want to avoid making a breaking change... Therefore this is the least of the evils.
+                    if (host.Transport is ServerSentEventsTransport)
+                    {
+                        (host.Transport as ServerSentEventsTransport).ReconnectDelay = TimeSpan.FromSeconds(15);
+                    }
+                    else if (host.Transport is LongPollingTransport)
+                    {
+                        (host.Transport as LongPollingTransport).ReconnectDelay = TimeSpan.FromSeconds(15);
+                    }
+                    else if (host.Transport is WebSocketTransport)
+                    {
+                        (host.Transport as WebSocketTransport).ReconnectDelay = TimeSpan.FromSeconds(15);
+                    }
+
+                    connection.Start(host.Transport).Wait();
+
+                    // Set reconnect window to zero so the second we attempt to reconnect we can ensure that the reconnect window is verified.
+                    ((Client.IConnection)connection).ReconnectWindow = TimeSpan.FromSeconds(0);
+
+                    // Without this the connection start and reconnect can race with eachother resulting in a deadlock.
+                    Thread.Sleep(TimeSpan.FromSeconds(3));
+
+                    host.Shutdown();
+
+                    Assert.True(disconnectWh.Wait(TimeSpan.FromSeconds(15)), "Closed never fired");
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(HostType.Memory, TransportType.ServerSentEvents, MessageBusType.Default)]
+        [InlineData(HostType.Memory, TransportType.ServerSentEvents, MessageBusType.Fake)]
+        [InlineData(HostType.Memory, TransportType.ServerSentEvents, MessageBusType.FakeMultiStream)]
+        [InlineData(HostType.Memory, TransportType.LongPolling, MessageBusType.Default)]
+        [InlineData(HostType.Memory, TransportType.LongPolling, MessageBusType.Fake)]
+        [InlineData(HostType.Memory, TransportType.LongPolling, MessageBusType.FakeMultiStream)]
+        [InlineData(HostType.IISExpress, TransportType.LongPolling, MessageBusType.Default)]
+        [InlineData(HostType.IISExpress, TransportType.ServerSentEvents, MessageBusType.Default)]
+        [InlineData(HostType.IISExpress, TransportType.Websockets, MessageBusType.Default)]
+        [InlineData(HostType.HttpListener, TransportType.LongPolling, MessageBusType.Default)]
+        [InlineData(HostType.HttpListener, TransportType.ServerSentEvents, MessageBusType.Default)]
+        [InlineData(HostType.HttpListener, TransportType.Websockets, MessageBusType.Default)]
         public void ReconnectExceedingReconnectWindowDisconnects(HostType hostType, TransportType transportType, MessageBusType messageBusType)
         {
             // Test cannot be async because if we do host.ShutDown() after an await the connection stops.
