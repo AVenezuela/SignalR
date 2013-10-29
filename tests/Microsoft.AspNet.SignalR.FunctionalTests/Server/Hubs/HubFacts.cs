@@ -109,21 +109,19 @@ namespace Microsoft.AspNet.SignalR.Tests
         [InlineData(HostType.HttpListener, TransportType.Websockets)]
         [InlineData(HostType.HttpListener, TransportType.ServerSentEvents)]
         [InlineData(HostType.HttpListener, TransportType.LongPolling)]
-        public void BasicAuthCredentialsFlow(HostType hostType, TransportType transportType)
+        public void AuthCredentialsFlow(HostType hostType, TransportType transportType)
         {
             using (var host = CreateHost(hostType, transportType))
             {
                 host.Initialize();
 
-                var connection = CreateHubConnection(host, path: "/basicauth/signalr", useDefaultUrl: false);
+                var connection = CreateAuthHubConnection(host, "user", "password");
                 var proxy = connection.CreateHubProxy("AuthenticatedEchoHub");
 
                 var tcs = new TaskCompletionSource<string>();
 
                 using (connection)
                 {
-                    connection.Credentials = new System.Net.NetworkCredential("user", "password");
-
                     proxy.On<string>("echo", data =>
                     {
                         tcs.TrySetResult(data);
@@ -235,15 +233,11 @@ namespace Microsoft.AspNet.SignalR.Tests
             {
                 host.Initialize();
 
-                var connection1 = CreateHubConnection(host, path: "/basicauth/signalr", useDefaultUrl: false);
-                var connection2 = CreateHubConnection(host, path: "/basicauth/signalr", useDefaultUrl: false);
-                var connection3 = CreateHubConnection(host, path: "/basicauth/signalr", useDefaultUrl: false);
-                var connection4 = CreateHubConnection(host, path: "/basicauth/signalr", useDefaultUrl: false);
-                connection1.Credentials = new System.Net.NetworkCredential("user1", "password");
-                connection2.Credentials = new System.Net.NetworkCredential("user1", "password");
-                connection3.Credentials = new System.Net.NetworkCredential("user1", "password");
-                connection4.Credentials = new System.Net.NetworkCredential("user2", "password");
-
+                var connection1 = CreateAuthHubConnection(host, "user1", "password");
+                var connection2 = CreateAuthHubConnection(host, "user1", "password");
+                var connection3 = CreateAuthHubConnection(host, "user1", "password");
+                var connection4 = CreateAuthHubConnection(host, "user2", "password");
+                
                 var wh1 = new ManualResetEventSlim();
                 var wh2 = new ManualResetEventSlim();
                 var wh3 = new ManualResetEventSlim();

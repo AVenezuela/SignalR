@@ -21,6 +21,8 @@ using Owin;
 
 namespace Microsoft.AspNet.SignalR.Tests.Common
 {
+    using System.Security.Claims;
+    using Microsoft.Owin.Security.Cookies;
     using AppFunc = Func<IDictionary<string, object>, Task>;
 
     public static class Initializer
@@ -163,10 +165,38 @@ namespace Microsoft.AspNet.SignalR.Tests.Common
             app.MapSignalR<FallbackToLongPollingConnectionThrows>("/fall-back-throws", config);
             app.MapSignalR<PreserializedJsonConnection>("/preserialize", config);
 
-            // This subpipeline is protected by basic auth
-            app.Map("/basicauth", map =>
+            // This subpipeline is protected by cookie auth
+            app.Map("/cookieauth", map =>
             {
-                map.UseBasicAuthentication(new BasicAuthenticationProvider());
+                var options = new CookieAuthenticationOptions()
+                {
+                    AuthenticationType = CookieAuthenticationDefaults.AuthenticationType,
+                    LoginPath = CookieAuthenticationDefaults.LoginPath,
+                    LogoutPath = CookieAuthenticationDefaults.LogoutPath,
+                };
+
+                map.UseCookieAuthentication(options);
+
+                map.Use(async (context, next) =>
+                {
+                    if (context.Request.Path.Value.Contains(options.LoginPath.Value))
+                    {
+                        if (context.Request.Method == "POST")
+                        {
+                            var form = await context.Request.ReadFormAsync();
+                            var userName = form["UserName"];
+                            var password = form["Password"];
+
+                            var identity = new ClaimsIdentity(options.AuthenticationType);
+                            identity.AddClaim(new Claim(ClaimTypes.Name, userName));
+                            context.Authentication.SignIn(identity);
+                        }
+                    }
+                    else
+                    {
+                        await next();
+                    }
+                });
 
                 var subConfig = new ConnectionConfiguration
                 {

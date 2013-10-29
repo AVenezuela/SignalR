@@ -92,7 +92,7 @@ namespace Microsoft.AspNet.SignalR.Tests
 
             private static Task ProcessRequest(MemoryHost host, string transport, string connectionToken)
             {
-                return host.Get("http://foo/echo/connect?transport=" + transport + "&connectionToken=" + connectionToken);
+                return host.Get("http://foo/echo/connect?transport=" + transport + "&connectionToken=" + connectionToken, r => { }, isLongRunning: true);
             }
 
             [Fact]
@@ -256,19 +256,17 @@ namespace Microsoft.AspNet.SignalR.Tests
             [InlineData(HostType.HttpListener, TransportType.Websockets)]
             [InlineData(HostType.HttpListener, TransportType.ServerSentEvents)]
             [InlineData(HostType.HttpListener, TransportType.LongPolling)]
-            public void BasicAuthCredentialsFlow(HostType hostType, TransportType transportType)
+            public void AuthCredentialsFlow(HostType hostType, TransportType transportType)
             {
                 using (var host = CreateHost(hostType, transportType))
                 {
                     host.Initialize();
 
-                    var connection = CreateConnection(host, "/basicauth/echo");
+                    var connection = CreateAuthConnection(host, "/echo", "user", "password");
                     var tcs = new TaskCompletionSource<string>();
 
                     using (connection)
                     {
-                        connection.Credentials = new System.Net.NetworkCredential("user", "password");
-
                         connection.Received += data =>
                         {
                             tcs.TrySetResult(data);
